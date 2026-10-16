@@ -285,7 +285,7 @@ function brandLogin(){const c=SCH(),g=document.querySelector('.glass'),lg=PH['__
 (function(){const _r=render,_l=showLogin;render=function(){_r.apply(this,arguments);brand()};showLogin=function(){_l.apply(this,arguments);brandLogin()}})();
 
 /* ---------- Firestore backend (own username + password login, no Firebase Auth) ---------- */
-let fb,db,entering=false,last={},tm,dirty=false,busyPush=false,SY='';
+let DEFPW=false,fb,db,entering=false,last={},tm,dirty=false,busyPush=false,SY='';
 const RULES=`rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
@@ -337,7 +337,7 @@ function hydrate(){document.querySelectorAll('.pp[data-id]').forEach(e=>{const i
 function busy(m){document.body.className='';$('login').innerHTML=`<div class="glass"><h1>MAWUKO GIRLS SENIOR HIGH SCHOOL</h1><p>${esc(m)}</p></div>`}
 function showNoConfig(m){document.body.className='';$('login').innerHTML=`<div class="glass w"><h1>Firebase not connected</h1><p>Open this HTML file in a text editor, find <b>FIREBASE_CONFIG</b> at the top of the script, paste your Firebase values, save, and reload this page.</p><div class="er">${esc(m||'')}</div></div>`}
 function showSetup(){document.body.className='';$('login').innerHTML=`<div class="glass w"><h1>Create the school database</h1><p>Firestore is connected. Create the first account (Head of ICT) and the database.</p><label>Full name</label><input id="sn"><label>Username (letters/numbers, no spaces)</label><input id="se" autocomplete="username"><label>Password (min 6 characters)</label><input id="sp" type="password" autocomplete="new-password"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ss" style="width:auto"> Load sample data (1,056 demo students)</label><div class="er" id="le"></div><button onclick="setupDb()">Create database</button><details><summary>Firestore rules to publish first (Firestore › Rules)</summary><textarea readonly rows="10" onclick="this.select()">${esc(RULES)}</textarea></details></div>`}
-function showLogin(m){document.body.className='';$('login').innerHTML=`<div class="glass"><h1>MAWUKO GIRLS SENIOR HIGH SCHOOL</h1><p>School Management System · Sign in</p><label>Username</label><input id="lu" autocomplete="username" placeholder="Enter username"><label>Password</label><input id="lp" type="password" autocomplete="current-password" placeholder="Enter password" onkeydown="if(event.key=='Enter')doLogin()"><div class="er" id="le">${esc(m||'')}</div><button onclick="doLogin()">Sign in</button><small>Forgot your password? Ask the Head of ICT to reset it.<br>Developed by SOMEFOST SOLUTIONS LIMITED</small></div>`}
+function showLogin(m){document.body.className='';$('login').innerHTML=`<div class="glass"><h1>MAWUKO GIRLS SENIOR HIGH SCHOOL</h1><p>School Management System · Sign in</p><label>Username</label><input id="lu" autocomplete="username" placeholder="Enter username"><label>Password</label><input id="lp" type="password" autocomplete="current-password" placeholder="Enter password" onkeydown="if(event.key=='Enter')doLogin()"><div class="er" id="le">${esc(m||'')}</div><button onclick="doLogin()">Sign in</button><small>${DEFPW?'First-time login: <b>ict</b> / <b>admin123</b> (change it after signing in)<br>':''}Forgot your password? Ask the Head of ICT to reset it.<br>Developed by SOMEFOST SOLUTIONS LIMITED</small></div>`}
 async function setupDb(){const n=$('sn').value.trim(),u=$('se').value.trim().toLowerCase(),p=$('sp').value,smp=$('ss').checked,er=m=>{$('le').textContent=m};
 if(!n||!UID.test(u)||p.length<6){er('Enter your name, a username (3+ letters/numbers, no spaces) and a password of at least 6 characters.');return}er('Creating database…');
 try{const salt=rs(),rec={name:n,u,role:'ict',on:true,salt,h:hpw(u,p,salt)},base=smp?init():{students:[],staff:[],att:{},grades:{},notices:[]};
@@ -347,22 +347,29 @@ await db.doc('meta/setup').set({done:true,by:u,at:new Date().toISOString()});try
 await Promise.all([lp('__logo__'),lp('__logopdf__')]);tab=ROLES.ict.home;render()}catch(x){ME=null;S=empty();er(am(x))}}
 async function enter(u,d){entering=true;try{if(!d.on||!ROLES[d.role]){showLogin('This account is suspended or invalid. Contact the Head of ICT.');return}
 busy('Loading your data…');ME={name:d.name,u,role:d.role,house:d.house,subject:d.subject,on:true,uid:u};try{sessionStorage.setItem('mg_s',JSON.stringify({u,h:d.h}))}catch(e){}
-await pull();await Promise.all([lp('__logo__'),lp('__logopdf__')]);tab=ROLES[ME.role].home;render()}catch(e){ME=null;showLogin('Could not load data: '+am(e))}finally{entering=false}}
+await pull();await Promise.all([lp('__logo__'),lp('__logopdf__')]);tab=ROLES[ME.role].home;render();if(u=='ict'&&d.h===hpw('ict','admin123',d.salt||''))setTimeout(()=>alert('You are using the default password. Please change it now: Users › Change password.'),400)}catch(e){ME=null;showLogin('Could not load data: '+am(e))}finally{entering=false}}
 async function doLogin(){const u=$('lu').value.trim().toLowerCase(),p=$('lp').value,er=m=>{$('le').textContent=m};if(!u||!p){er('Enter your username and password.');return}if(!UID.test(u)){er('Invalid username or password.');return}
-try{const d=await db.doc('users/'+u).get();if(!d.exists||hpw(u,p,d.data().salt||'')!==d.data().h){er('Invalid username or password.');return}if(!entering)await enter(u,d.data())}catch(x){er(am(x))}}
+try{const d=await db.doc('users/'+u).get();let dd=d.exists?d.data():null;if(!dd&&u=='ict'&&p=='admin123'){const salt=rs();dd={name:'Head of ICT',u:'ict',role:'ict',on:true,salt,h:hpw('ict','admin123',salt)};await db.doc('users/ict').set(dd);try{await db.doc('meta/setup').set({done:true,by:'ict',at:new Date().toISOString()})}catch(e){}}if(!dd||hpw(u,p,dd.salt||'')!==dd.h){er('Invalid username or password.');return}if(!entering)await enter(u,dd)}catch(x){er(am(x))}}
 async function out(){if(dirty)await push();try{sessionStorage.removeItem('mg_s')}catch(e){}ME=null;S=empty();showLogin()}
 async function boot(){if(!FIREBASE_CONFIG.apiKey||/^PASTE/.test(FIREBASE_CONFIG.apiKey)){showNoConfig();return}
 try{fbInit(FIREBASE_CONFIG)}catch(e){showNoConfig(e.message);return}busy('Connecting to Firestore…');
-try{const[su,br]=await Promise.all([db.doc('meta/setup').get(),db.doc('meta/branding').get()]);if(br.exists)S.cfg.school=br.data();await lp('__logo__');if(!su.exists){showSetup();return}}
+try{const[su,br]=await Promise.all([db.doc('meta/setup').get(),db.doc('meta/branding').get()]);if(br.exists)S.cfg.school=br.data();await lp('__logo__');if(!su.exists){await autoSetup();return}}
 catch(e){showNoConfig('Could not reach Firestore: '+am(e));return}
 let ss=null;try{ss=JSON.parse(sessionStorage.getItem('mg_s'))}catch(e){}
-if(ss&&UID.test(ss.u||'')){try{const d=await db.doc('users/'+ss.u).get();if(d.exists&&d.data().h===ss.h){await enter(ss.u,d.data());return}}catch(e){}}showLogin()}
+if(ss&&UID.test(ss.u||'')){try{const d=await db.doc('users/'+ss.u).get();if(d.exists&&d.data().h===ss.h){await enter(ss.u,d.data());return}}catch(e){}}try{const iu=await db.doc('users/ict').get();DEFPW=iu.exists&&iu.data().h===hpw('ict','admin123',iu.data().salt||'')}catch(e){}showLogin()}
 /* user management (Head of ICT) */
 async function addU(){const n=$('un').value.trim(),u=$('uu').value.trim().toLowerCase(),p=$('up').value;if(!n||!UID.test(u)||p.length<6){alert('Enter a name, a username (3+ letters/numbers, no spaces) and a temporary password of at least 6 characters.');return}
 try{if(S.users.some(x=>x.u==u)||(await db.doc('users/'+u).get()).exists){alert('That username is taken.');return}
 const salt=rs(),rec={name:n,u,role:$('ur').value,house:$('uh').value,subject:$('us').value,on:true,salt,h:hpw(u,p,salt)};await db.doc('users/'+u).set(rec);S.users.push({...rec,uid:u});last['users/'+u]=cj(rec);alert('Account created. Give '+n+' the username and temporary password securely.');render()}catch(e){alert(am(e))}}
 function rp(i){const x=S.users[i],p=prompt('New password for '+x.u+' (min 6 characters):');if(!p)return;if(p.length<6){alert('Password too short.');return}x.salt=rs();x.h=hpw(x.u,p,x.salt);save();if(x.uid==ME.uid)try{sessionStorage.setItem('mg_s',JSON.stringify({u:x.u,h:x.h}))}catch(e){}alert('Password updated.')}
 function du(i){if(confirm('Delete the account '+S.users[i].u+'?')){S.users.splice(i,1);save();render()}}
+async function autoSetup(){busy('Creating the database (first run)…');
+try{const salt=rs(),rec={name:'Head of ICT',u:'ict',role:'ict',on:true,salt,h:hpw('ict','admin123',salt)};
+S=Object.assign(empty(),{students:[],staff:[],att:{},grades:{},notices:[]},{users:[{...rec,uid:'ict'}]});ME={name:'Head of ICT',u:'ict',role:'ict',on:true,uid:'ict'};last={};
+if(!await push())throw new Error('Could not write to Firestore. Publish the rules (Firestore › Rules) and reload.');
+await db.doc('meta/setup').set({done:true,by:'ict',at:new Date().toISOString()});ME=null;S=empty();DEFPW=true;showLogin()}
+catch(e){ME=null;S=empty();showNoConfig('Could not create the database: '+am(e))}}
+function loadSample(){if(S.students.length){alert('The database already has students, so sample data was not loaded.');return}const b=init();S.students=b.students;S.staff=b.staff;save();alert('Sample data loaded.')}
 const GATEWAY=`// Mawuko SMS email gateway (Node 18+).  Setup:  npm i express cors nodemailer
 // Env: SMTP_HOST SMTP_PORT SMTP_SECURE(true|false) SMTP_USER SMTP_PASS MAIL_FROM API_KEY PORT
 // Run:  node email-gateway.js   then put https://YOUR-HOST/send-report in Reports > Email gateway URL.
@@ -385,6 +392,7 @@ function dlt(n,t){const a=document.createElement('a');a.href=URL.createObjectURL
 V['Backend Setup']=()=>{let pid=FIREBASE_CONFIG.projectId||'—';
 const box=(id,t,f)=>`<textarea readonly rows="12" id="${id}" style="width:100%;font:12px monospace">${esc(t)}</textarea><div class="row" style="margin-top:8px"><button class="b" onclick="cp('${id}')">Copy</button><button class="b" onclick="dlt('${f}',${id=='tr'?'RULES':'GATEWAY'})">Download ${f}</button></div>`;
 return`<div class="card"><h2>Backend setup</h2><p>Connected Firebase project: <b>${esc(pid)}</b></p><ol class="mut"><li>Create a Firebase project and a Firestore database (Firestore Database › Create database).</li><li>Paste your Firebase config into <b>FIREBASE_CONFIG</b> at the top of this file\'s script.</li><li>Publish the rules below (Firestore › Rules). They are open: see the warning.</li><li>Optional: run the email gateway below to email report PDFs to parents automatically.</li></ol></div>
+<div class="card"><h2>Sample data</h2><p class="mut">Load 1,056 demo students and 8 teachers to try the app. Only works while the database has no students.</p><button class="b" onclick="loadSample()">Load sample data</button></div>
 <div class="card"><h2>1. Firestore security rules (firestore.rules)</h2>${box('tr',RULES,'firestore.rules')}</div>
 <div class="card"><h2>2. Email gateway (email-gateway.js)</h2><p class="mut">Needs Node 18+. Run <code>npm i express cors nodemailer</code>, set the SMTP environment variables listed at the top of the file, then start it and paste its address in Reports › Email gateway URL.</p>${box('tg',GATEWAY,'email-gateway.js')}</div>`};
 boot();
